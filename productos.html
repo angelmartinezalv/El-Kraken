@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Menú - El Kraken</title>
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/componentes.css">
+</head>
+<body>
+
+<div class="app">
+  <div id="nav-lateral" class="nav-lateral"></div>
+
+  <div class="contenido">
+    <div class="encabezado-pagina">
+      <h1>Administración del menú</h1>
+      <div class="flex gap-sm">
+        <button class="btn btn--secundario" id="btn-restaurar-menu">↻ Restaurar menú oficial El Kraken</button>
+        <button class="btn btn--primario" id="btn-nuevo-producto">+ Agregar producto</button>
+      </div>
+    </div>
+
+    <div class="tarjeta">
+      <table>
+        <thead>
+          <tr>
+            <th>Producto</th>
+            <th>Categoría</th>
+            <th>Precio</th>
+            <th>Estado</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="tabla-productos"></tbody>
+      </table>
+      <p class="texto-suave texto-centro" id="mensaje-vacio" style="display:none; margin-top:20px;">
+        No hay productos registrados todavía.
+      </p>
+    </div>
+  </div>
+</div>
+
+<div id="zona-modal"></div>
+
+<script src="js/utils/utils.js"></script>
+<script src="js/data/storage.js"></script>
+<script src="js/data/productos.js"></script>
+<script src="js/data/cuentas.js"></script>
+<script src="js/data/ventas.js"></script>
+<script src="js/data/corte.js"></script>
+<script src="js/ui/navegacion.js"></script>
+<script>
+  renderizarNavegacion('productos');
+
+  function pintarTabla() {
+    const productos = ProductosData.obtenerTodos();
+    const cuerpo = document.getElementById('tabla-productos');
+    const mensajeVacio = document.getElementById('mensaje-vacio');
+
+    if (productos.length === 0) {
+      cuerpo.innerHTML = '';
+      mensajeVacio.style.display = 'block';
+      return;
+    }
+    mensajeVacio.style.display = 'none';
+
+    cuerpo.innerHTML = productos
+      .map(
+        (p) => `
+        <tr>
+          <td><strong>${p.nombre}</strong></td>
+          <td>${p.categoria}</td>
+          <td>${Utils.formatoMoneda(p.precio)}</td>
+          <td><span class="badge ${p.activo !== false ? 'badge--activo' : 'badge--inactivo'}">${p.activo !== false ? 'Activo' : 'Inactivo'}</span></td>
+          <td>
+            <div class="flex gap-sm">
+              <button class="btn btn--secundario" data-accion="editar" data-id="${p.id}">✏️ Editar</button>
+              <button class="btn btn--secundario" data-accion="alternar" data-id="${p.id}">${p.activo !== false ? '🚫 Desactivar' : '✅ Activar'}</button>
+              <button class="btn btn--peligro" data-accion="eliminar" data-id="${p.id}">🗑️</button>
+            </div>
+          </td>
+        </tr>
+      `
+      )
+      .join('');
+
+    cuerpo.querySelectorAll('[data-accion]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const id = btn.dataset.id;
+        const accion = btn.dataset.accion;
+
+        if (accion === 'editar') {
+          abrirFormulario(ProductosData.obtenerPorId(id));
+        } else if (accion === 'alternar') {
+          ProductosData.alternarActivo(id);
+          pintarTabla();
+        } else if (accion === 'eliminar') {
+          const confirmado = await Utils.confirmar('¿Eliminar este producto de forma permanente?');
+          if (confirmado) {
+            ProductosData.eliminar(id);
+            pintarTabla();
+            Utils.notificar('Producto eliminado');
+          }
+        }
+      });
+    });
+  }
+
+  function abrirFormulario(producto = null) {
+    const esEdicion = !!producto;
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal-formulario">
+        <h2>${esEdicion ? 'Editar producto' : 'Nuevo producto'}</h2>
+        <div class="campo">
+          <label for="input-nombre">Nombre</label>
+          <input type="text" id="input-nombre" value="${producto ? producto.nombre : ''}" placeholder="Ej. Taco de asada">
+        </div>
+        <div class="campo">
+          <label for="input-precio">Precio</label>
+          <input type="number" id="input-precio" min="0" step="0.5" value="${producto ? producto.precio : ''}" placeholder="0.00">
+        </div>
+        <div class="campo">
+          <label for="input-categoria">Categoría</label>
+          <select id="input-categoria">
+            ${ProductosData.CATEGORIAS.map(
+              (c) => `<option value="${c}" ${producto && producto.categoria === c ? 'selected' : ''}>${c}</option>`
+            ).join('')}
+          </select>
+        </div>
+        <div class="modal-formulario__botones">
+          <button class="btn btn--secundario" id="btn-cancelar-form" style="flex:1;">Cancelar</button>
+          <button class="btn btn--primario" id="btn-guardar-form" style="flex:1;">Guardar</button>
+        </div>
+      </div>
+    `;
+    document.getElementById('zona-modal').appendChild(overlay);
+
+    overlay.querySelector('#btn-cancelar-form').addEventListener('click', () => overlay.remove());
+
+    overlay.querySelector('#btn-guardar-form').addEventListener('click', () => {
+      const nombre = overlay.querySelector('#input-nombre').value.trim();
+      const precio = parseFloat(overlay.querySelector('#input-precio').value);
+      const categoria = overlay.querySelector('#input-categoria').value;
+
+      if (!nombre || isNaN(precio) || precio < 0) {
+        Utils.notificar('Verifica el nombre y el precio del producto', 'error');
+        return;
+      }
+
+      if (esEdicion) {
+        ProductosData.editar(producto.id, { nombre, precio, categoria });
+        Utils.notificar('Producto actualizado', 'exito');
+      } else {
+        ProductosData.agregar({ nombre, precio, categoria });
+        Utils.notificar('Producto agregado', 'exito');
+      }
+
+      overlay.remove();
+      pintarTabla();
+    });
+  }
+
+  document.getElementById('btn-nuevo-producto').addEventListener('click', () => abrirFormulario());
+
+  document.getElementById('btn-restaurar-menu').addEventListener('click', async () => {
+    const confirmado = await Utils.confirmar(
+      '¿Reemplazar TODOS los productos actuales por el menú oficial y actualizado de El Kraken? Esta acción no se puede deshacer.'
+    );
+    if (confirmado) {
+      ProductosData.restaurarMenuOficial();
+      pintarTabla();
+      Utils.notificar('Menú oficial de El Kraken restaurado', 'exito');
+    }
+  });
+
+  pintarTabla();
+</script>
+
+</body>
+</html>

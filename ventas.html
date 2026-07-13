@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Historial de Ventas - El Kraken</title>
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/componentes.css">
+</head>
+<body>
+
+<div class="app">
+  <div id="nav-lateral" class="nav-lateral"></div>
+
+  <div class="contenido">
+    <div class="encabezado-pagina">
+      <h1>Historial de ventas</h1>
+      <div class="flex gap-sm" style="align-items:center;">
+        <input type="date" id="filtro-fecha" style="width:auto;">
+        <button class="btn btn--secundario" id="btn-ver-todas">Ver todas</button>
+      </div>
+    </div>
+
+    <div class="grid-resumen" id="grid-resumen"></div>
+
+    <div class="tarjeta">
+      <table>
+        <thead>
+          <tr>
+            <th>Folio</th>
+            <th>Mesa/Cliente</th>
+            <th>Fecha</th>
+            <th>Productos</th>
+            <th>Método</th>
+            <th>Total</th>
+          </tr>
+        </thead>
+        <tbody id="tabla-ventas"></tbody>
+      </table>
+      <p class="texto-suave texto-centro" id="mensaje-vacio" style="display:none; margin-top:20px;">
+        No hay ventas registradas en este periodo.
+      </p>
+    </div>
+  </div>
+</div>
+
+<script src="js/utils/utils.js"></script>
+<script src="js/data/storage.js"></script>
+<script src="js/data/productos.js"></script>
+<script src="js/data/cuentas.js"></script>
+<script src="js/data/ventas.js"></script>
+<script src="js/data/corte.js"></script>
+<script src="js/ui/navegacion.js"></script>
+<script>
+  renderizarNavegacion('ventas');
+
+  document.getElementById('filtro-fecha').value = Utils.fechaHoy();
+
+  function pintar(fechaFiltro) {
+    const ventas = fechaFiltro ? VentasData.obtenerPorFecha(fechaFiltro) : VentasData.obtenerTodas();
+    const cuerpo = document.getElementById('tabla-ventas');
+    const mensajeVacio = document.getElementById('mensaje-vacio');
+
+    const total = Utils.redondear(ventas.reduce((s, v) => s + v.total, 0));
+
+    document.getElementById('grid-resumen').innerHTML = `
+      <div class="tarjeta-resumen">
+        <div class="tarjeta-resumen__etiqueta">Ventas encontradas</div>
+        <div class="tarjeta-resumen__valor">${ventas.length}</div>
+      </div>
+      <div class="tarjeta-resumen">
+        <div class="tarjeta-resumen__etiqueta">Total del periodo</div>
+        <div class="tarjeta-resumen__valor">${Utils.formatoMoneda(total)}</div>
+      </div>
+    `;
+
+    if (ventas.length === 0) {
+      cuerpo.innerHTML = '';
+      mensajeVacio.style.display = 'block';
+      return;
+    }
+    mensajeVacio.style.display = 'none';
+
+    cuerpo.innerHTML = ventas
+      .slice()
+      .reverse()
+      .map(
+        (v) => `
+        <tr>
+          <td>#${v.folio}</td>
+          <td>${v.mesa || '—'}</td>
+          <td>${Utils.fechaHoraLegible(v.fecha)}</td>
+          <td>${v.items.map((i) => `${i.cantidad}× ${i.nombre}`).join(', ')}</td>
+          <td>${v.metodoPago}</td>
+          <td><strong>${Utils.formatoMoneda(v.total)}</strong></td>
+        </tr>
+      `
+      )
+      .join('');
+  }
+
+  document.getElementById('filtro-fecha').addEventListener('change', (e) => pintar(e.target.value));
+  document.getElementById('btn-ver-todas').addEventListener('click', () => {
+    document.getElementById('filtro-fecha').value = '';
+    pintar(null);
+  });
+
+  pintar(Utils.fechaHoy());
+</script>
+
+</body>
+</html>

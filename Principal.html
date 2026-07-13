@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>El Kraken - Punto de Venta</title>
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/componentes.css">
+</head>
+<body>
+
+<div class="app">
+  <div id="nav-lateral" class="nav-lateral"></div>
+
+  <div class="contenido">
+    <div class="encabezado-pagina">
+      <div class="header-logo">
+        <img src="assets/logo.jpg" alt="El Kraken" class="pagina-logo" />
+        <div>
+          <h1>Bienvenido a El Kraken</h1>
+          <p class="texto-suave">Control de pedidos, ventas y caja para tu restaurante</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-resumen" id="grid-resumen"></div>
+
+    <div class="tarjeta">
+      <h2>Accesos rápidos</h2>
+      <div class="flex gap-md" style="flex-wrap: wrap; margin-top: 12px;">
+        <a href="pedidos.html" style="text-decoration:none; flex:1; min-width:200px;">
+          <button class="btn btn--primario btn--grande">🧾 Ver mesas / nuevo pedido</button>
+        </a>
+        <a href="corte.html" style="text-decoration:none; flex:1; min-width:200px;">
+          <button class="btn btn--secundario btn--grande">💰 Ver corte de caja</button>
+        </a>
+        <a href="productos.html" style="text-decoration:none; flex:1; min-width:200px;">
+          <button class="btn btn--secundario btn--grande">🍽️ Administrar menú</button>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="js/utils/utils.js"></script>
+<script src="js/data/storage.js"></script>
+<script src="js/data/productos.js"></script>
+<script src="js/data/cuentas.js"></script>
+<script src="js/data/ventas.js"></script>
+<script src="js/data/corte.js"></script>
+<script src="js/ui/navegacion.js"></script>
+<script>
+  renderizarNavegacion('inicio');
+
+  function pintarResumen() {
+    const ventasHoy = VentasData.obtenerPorFecha();
+    const totalHoy = VentasData.totalDelDia();
+    const totalProductos = ProductosData.obtenerActivos().length;
+    const cuentasAbiertas = CuentasData.obtenerAbiertas();
+    const totalPendiente = Utils.redondear(
+      cuentasAbiertas.reduce((s, c) => s + CuentasData.calcularTotal(c), 0)
+    );
+
+    document.getElementById('grid-resumen').innerHTML = `
+      <div class="tarjeta-resumen">
+        <div class="tarjeta-resumen__etiqueta">Ventas de hoy</div>
+        <div class="tarjeta-resumen__valor">${ventasHoy.length}</div>
+      </div>
+      <div class="tarjeta-resumen">
+        <div class="tarjeta-resumen__etiqueta">Total vendido hoy</div>
+        <div class="tarjeta-resumen__valor">${Utils.formatoMoneda(totalHoy)}</div>
+      </div>
+      <div class="tarjeta-resumen">
+        <div class="tarjeta-resumen__etiqueta">Productos en el menú</div>
+        <div class="tarjeta-resumen__valor">${totalProductos}</div>
+      </div>
+      <div class="tarjeta-resumen">
+        <div class="tarjeta-resumen__etiqueta">Mesas/pedidos abiertos</div>
+        <div class="tarjeta-resumen__valor">${cuentasAbiertas.length} ${cuentasAbiertas.length ? '(' + Utils.formatoMoneda(totalPendiente) + ')' : ''}</div>
+      </div>
+    `;
+
+  }
+
+  pintarResumen();
+</script>
+
+</body>
+</html>

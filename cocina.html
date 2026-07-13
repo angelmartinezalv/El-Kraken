@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cocina - El Kraken</title>
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/componentes.css">
+<style>
+  body { background: var(--color-secundario); }
+  .cocina-encabezado {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 28px;
+    color: #fff;
+  }
+  .cocina-encabezado h1 { margin: 0; font-size: 1.6rem; }
+  .cocina-estado {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.95rem;
+    color: #d8cfc2;
+  }
+  .cocina-punto {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--color-exito);
+  }
+  .cocina-punto.desconectado { background: var(--color-peligro); }
+
+  .cocina-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 18px;
+    padding: 0 28px 28px;
+  }
+
+  .ticket {
+    background: #fffdf9;
+    border-radius: var(--radio);
+    box-shadow: var(--sombra-fuerte);
+    padding: 18px 20px;
+    border-top: 6px solid var(--color-primario);
+  }
+  .ticket__mesa {
+    font-size: 1.3rem;
+    font-weight: 800;
+    margin-bottom: 2px;
+  }
+  .ticket__hora {
+    color: var(--color-texto-suave);
+    font-size: 0.85rem;
+    margin-bottom: 12px;
+  }
+  .ticket__items { list-style: none; margin: 0; padding: 0; }
+  .ticket__items li {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 6px 0;
+    border-bottom: 1px dashed var(--color-borde);
+    font-size: 1.05rem;
+  }
+  .ticket__items li:last-child { border-bottom: none; }
+  .ticket__cantidad {
+    font-weight: 800;
+    color: var(--color-primario);
+    min-width: 28px;
+  }
+  .ticket__notas {
+    margin-top: 12px;
+    padding: 8px 10px;
+    background: #fff3e0;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    color: var(--color-secundario);
+  }
+  .cocina-vacio {
+    text-align: center;
+    color: #d8cfc2;
+    padding: 80px 20px;
+    font-size: 1.2rem;
+  }
+</style>
+</head>
+<body>
+
+<div class="cocina-encabezado">
+  <h1>🐙 Cocina — El Kraken</h1>
+  <div class="cocina-estado">
+    <span class="cocina-punto" id="punto-estado"></span>
+    <span id="texto-estado">Conectando…</span>
+  </div>
+</div>
+
+<div class="cocina-grid" id="cocina-grid"></div>
+
+<script>
+  const REJILLA = document.getElementById('cocina-grid');
+  const PUNTO = document.getElementById('punto-estado');
+  const TEXTO_ESTADO = document.getElementById('texto-estado');
+
+  function horaLegible(fechaISO) {
+    try {
+      return new Date(fechaISO).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function pintarTickets(cuentas) {
+    if (!cuentas || cuentas.length === 0) {
+      REJILLA.innerHTML = '<div class="cocina-vacio">No hay pedidos abiertos en este momento.</div>';
+      return;
+    }
+
+    // Las cuentas más recientes primero
+    const ordenadas = [...cuentas].sort((a, b) => new Date(b.creada) - new Date(a.creada));
+
+    REJILLA.innerHTML = ordenadas
+      .map((cuenta) => {
+        const items = (cuenta.items || [])
+          .map(
+            (item) => `
+            <li>
+              <span>${item.nombre}</span>
+              <span class="ticket__cantidad">x${item.cantidad}</span>
+            </li>
+          `
+          )
+          .join('');
+
+        const notas = cuenta.notas
+          ? `<div class="ticket__notas">📝 ${cuenta.notas}</div>`
+          : '';
+
+        return `
+          <div class="ticket">
+            <div class="ticket__mesa">${cuenta.nombre || 'Mesa'}</div>
+            <div class="ticket__hora">Abierta a las ${horaLegible(cuenta.creada)}</div>
+            <ul class="ticket__items">${items || '<li>Sin productos aún</li>'}</ul>
+            ${notas}
+          </div>
+        `;
+      })
+      .join('');
+  }
+
+  async function actualizar() {
+    try {
+      const resp = await fetch('/api/pedidos', { cache: 'no-store' });
+      if (!resp.ok) throw new Error('Respuesta no válida');
+      const datos = await resp.json();
+      pintarTickets(datos.pedidos);
+      PUNTO.classList.remove('desconectado');
+      TEXTO_ESTADO.textContent = 'Conectado — actualizado ' + new Date().toLocaleTimeString('es-MX');
+    } catch (error) {
+      PUNTO.classList.add('desconectado');
+      TEXTO_ESTADO.textContent = 'Sin conexión con la caja. Verifica que el servidor esté encendido.';
+    }
+  }
+
+  actualizar();
+  setInterval(actualizar, 4000); // refresca cada 4 segundos
+</script>
+
+</body>
+</html>
