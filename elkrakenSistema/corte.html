@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Corte de Caja - El Kraken</title>
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/componentes.css">
+</head>
+<body>
+
+<div class="app">
+  <div id="nav-lateral" class="nav-lateral"></div>
+
+  <div class="contenido">
+    <div class="encabezado-pagina">
+      <h1>Corte de caja</h1>
+      <div class="flex gap-sm">
+        <input type="date" id="fecha-corte" style="width:auto;">
+        <button class="btn btn--primario" id="btn-generar-corte">Generar corte</button>
+        <button class="btn btn--exito" id="btn-exportar-excel">📥 Exportar a Excel</button>
+        <button class="btn btn--secundario" id="btn-liberar-espacio">🧹 Liberar espacio</button>
+      </div>
+    </div>
+
+    <p class="texto-suave" id="uso-almacenamiento" style="margin-top:-8px; margin-bottom:16px;"></p>
+
+    <div id="contenido-corte">
+      <p class="texto-suave texto-centro">Selecciona una fecha y genera el corte para ver el resumen.</p>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="js/utils/utils.js"></script>
+<script src="js/data/storage.js"></script>
+<script src="js/data/productos.js"></script>
+<script src="js/data/cuentas.js"></script>
+<script src="js/data/ventas.js"></script>
+<script src="js/data/corte.js"></script>
+<script src="js/ui/navegacion.js"></script>
+<script>
+  renderizarNavegacion('corte');
+
+  document.getElementById('fecha-corte').value = Utils.fechaHoy();
+  let corteActual = null;
+
+  function pintarCorte(corte) {
+    corteActual = corte;
+    const contenedor = document.getElementById('contenido-corte');
+
+    if (!corte || corte.numeroVentas === 0) {
+      contenedor.innerHTML = `<p class="texto-suave texto-centro">No hay ventas registradas para esta fecha.</p>`;
+      return;
+    }
+
+    const filasProductos = Object.entries(corte.productosVendidos)
+      .sort((a, b) => b[1].subtotal - a[1].subtotal)
+      .map(
+        ([nombre, datos]) => `
+        <tr>
+          <td>${nombre}</td>
+          <td>${datos.cantidad}</td>
+          <td><strong>${Utils.formatoMoneda(datos.subtotal)}</strong></td>
+        </tr>
+      `
+      )
+      .join('');
+
+    const filasMetodoPago = Object.entries(corte.desglosePorMetodoPago || {})
+      .sort((a, b) => b[1].total - a[1].total)
+      .map(
+        ([metodo, datos]) => `
+        <tr>
+          <td>${metodo}</td>
+          <td>${datos.numeroVentas}</td>
+          <td><strong>${Utils.formatoMoneda(datos.total)}</strong></td>
+        </tr>
+      `
+      )
+      .join('');
+
+    const filasPorHora = Object.entries(corte.ventasPorHora || {})
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(
+        ([hora, datos]) => `
+        <tr>
+          <td>${hora}</td>
+          <td>${datos.numeroVentas}</td>
+          <td><strong>${Utils.formatoMoneda(datos.total)}</strong></td>
+        </tr>
+      `
+      )
+      .join('');
+
+    contenedor.innerHTML = `
+      <div class="grid-resumen">
+        <div class="tarjeta-resumen">
+          <div class="tarjeta-resumen__etiqueta">Fecha del corte</div>
+          <div class="tarjeta-resumen__valor">${corte.fecha}</div>
+        </div>
+        <div class="tarjeta-resumen">
+          <div class="tarjeta-resumen__etiqueta">Generado a las</div>
+          <div class="tarjeta-resumen__valor">${Utils.fechaHoraLegible(corte.generadoEn).split(' ').slice(-1)[0]}</div>
+        </div>
+        <div class="tarjeta-resumen">
+          <div class="tarjeta-resumen__etiqueta">Número de ventas</div>
+          <div class="tarjeta-resumen__valor">${corte.numeroVentas}</div>
+        </div>
+        <div class="tarjeta-resumen">
+          <div class="tarjeta-resumen__etiqueta">Total del día</div>
+          <div class="tarjeta-resumen__valor">${Utils.formatoMoneda(corte.totalVentas)}</div>
+        </div>
+        <div class="tarjeta-resumen">
+          <div class="tarjeta-resumen__etiqueta">Total recibido</div>
+          <div class="tarjeta-resumen__valor">${Utils.formatoMoneda(corte.totalRecibido || 0)}</div>
+        </div>
+        <div class="tarjeta-resumen">
+          <div class="tarjeta-resumen__etiqueta">Cambio entregado</div>
+          <div class="tarjeta-resumen__valor">${Utils.formatoMoneda(corte.totalCambio || 0)}</div>
+        </div>
+      </div>
+
+      <div class="layout-pedido">
+        <div class="tarjeta">
+          <h2>Desglose por producto</h2>
+          <table>
+            <thead><tr><th>Producto</th><th>Cantidad vendida</th><th>Subtotal</th></tr></thead>
+            <tbody>${filasProductos}</tbody>
+          </table>
+        </div>
+
+        <div>
+          <div class="tarjeta" style="margin-bottom:16px;">
+            <h2>Por método de pago</h2>
+            <table>
+              <thead><tr><th>Método</th><th>Ventas</th><th>Total</th></tr></thead>
+              <tbody>${filasMetodoPago}</tbody>
+            </table>
+          </div>
+
+          <div class="tarjeta">
+            <h2>Ventas por hora</h2>
+            <table>
+              <thead><tr><th>Hora</th><th>Ventas</th><th>Total</th></tr></thead>
+              <tbody>${filasPorHora}</tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  document.getElementById('btn-generar-corte').addEventListener('click', () => {
+    const fecha = document.getElementById('fecha-corte').value || Utils.fechaHoy();
+    const corte = CorteData.generar(fecha);
+    pintarCorte(corte);
+    Utils.notificar('Corte generado correctamente', 'exito');
+  });
+
+  document.getElementById('btn-exportar-excel').addEventListener('click', () => {
+    if (!corteActual || corteActual.numeroVentas === 0) {
+      Utils.notificar('Primero genera un corte con ventas registradas', 'error');
+      return;
+    }
+
+    const ahora = new Date();
+    const horaGeneracion = Utils.fechaHoraLegible(corteActual.generadoEn);
+    const horaExportacion = Utils.fechaHoraLegible(ahora.toISOString());
+
+    // ---------- Hoja 1: Resumen general ----------
+    const filasResumen = [
+      { Dato: 'Negocio', Valor: 'El Kraken' },
+      { Dato: 'Fecha del corte', Valor: corteActual.fecha },
+      { Dato: 'Corte generado el', Valor: horaGeneracion },
+      { Dato: 'Excel exportado el', Valor: horaExportacion },
+      { Dato: 'Número de ventas', Valor: corteActual.numeroVentas },
+      { Dato: 'Total del día', Valor: corteActual.totalVentas },
+      { Dato: 'Total recibido de clientes', Valor: corteActual.totalRecibido || 0 },
+      { Dato: 'Total de cambio entregado', Valor: corteActual.totalCambio || 0 },
+    ];
+    const hojaResumen = XLSX.utils.json_to_sheet(filasResumen, { header: ['Dato', 'Valor'], skipHeader: false });
+    hojaResumen['!cols'] = [{ wch: 26 }, { wch: 26 }];
+
+    // ---------- Hoja 2: Desglose por método de pago ----------
+    const filasMetodoPago = Object.entries(corteActual.desglosePorMetodoPago || {})
+      .sort((a, b) => b[1].total - a[1].total)
+      .map(([metodo, datos]) => ({
+        'Método de pago': metodo,
+        'Número de ventas': datos.numeroVentas,
+        'Total': datos.total,
+        '% del total del día': corteActual.totalVentas
+          ? Utils.redondear((datos.total / corteActual.totalVentas) * 100) + '%'
+          : '0%',
+      }));
+    const hojaMetodoPago = XLSX.utils.json_to_sheet(filasMetodoPago);
+    hojaMetodoPago['!cols'] = [{ wch: 18 }, { wch: 16 }, { wch: 14 }, { wch: 16 }];
+
+    // ---------- Hoja 3: Ventas por hora ----------
+    const filasPorHora = Object.entries(corteActual.ventasPorHora || {})
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([hora, datos]) => ({
+        'Hora': hora,
+        'Número de ventas': datos.numeroVentas,
+        'Total': datos.total,
+      }));
+    const hojaPorHora = XLSX.utils.json_to_sheet(filasPorHora);
+    hojaPorHora['!cols'] = [{ wch: 18 }, { wch: 16 }, { wch: 14 }];
+
+    // ---------- Hoja 4: Desglose por producto ----------
+    const filasProductos = Object.entries(corteActual.productosVendidos)
+      .sort((a, b) => b[1].subtotal - a[1].subtotal)
+      .map(([nombre, datos]) => ({
+        Producto: nombre,
+        'Cantidad vendida': datos.cantidad,
+        Subtotal: datos.subtotal,
+        'Precio promedio': Utils.redondear(datos.subtotal / datos.cantidad),
+      }));
+    const hojaProductos = XLSX.utils.json_to_sheet(filasProductos);
+    hojaProductos['!cols'] = [{ wch: 34 }, { wch: 16 }, { wch: 14 }, { wch: 16 }];
+
+    // ---------- Hoja 5: Detalle de cada venta ----------
+    const filasVentas = corteActual.ventas.map((v) => {
+      const fechaObj = new Date(v.fecha);
+      return {
+        Folio: v.folio,
+        Fecha: fechaObj.toLocaleDateString('es-MX'),
+        Hora: fechaObj.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }),
+        'Mesa/Cliente': v.mesa || '—',
+        Productos: v.items.map((i) => `${i.cantidad}x ${i.nombre}`).join(', '),
+        'Número de artículos': v.items.reduce((s, i) => s + i.cantidad, 0),
+        'Método de pago': v.metodoPago,
+        Total: v.total,
+        Recibido: v.recibido != null ? v.recibido : '',
+        Cambio: v.cambio || 0,
+        Notas: v.notas || '',
+      };
+    });
+    const hojaVentas = XLSX.utils.json_to_sheet(filasVentas);
+
+    // Ancho dinámico para la columna "Productos": se ajusta al contenido más
+    // largo (con un máximo) para que no se vea cortado al abrir el Excel.
+    const anchoProductos = Math.min(
+      80,
+      Math.max(45, ...filasVentas.map((f) => (f.Productos || '').length + 2))
+    );
+
+    hojaVentas['!cols'] = [
+      { wch: 8 }, { wch: 12 }, { wch: 8 }, { wch: 16 }, { wch: anchoProductos },
+      { wch: 14 }, { wch: 16 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 20 },
+    ];
+
+    hojaVentas['!rows'] = filasVentas.map(() => ({ hpx: 22 }));
+
+    const libro = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(libro, hojaResumen, 'Resumen');
+    XLSX.utils.book_append_sheet(libro, hojaMetodoPago, 'Por método de pago');
+    XLSX.utils.book_append_sheet(libro, hojaPorHora, 'Por hora');
+    XLSX.utils.book_append_sheet(libro, hojaProductos, 'Productos');
+    XLSX.utils.book_append_sheet(libro, hojaVentas, 'Ventas');
+
+    const marcaHora = `${String(ahora.getHours()).padStart(2, '0')}${String(ahora.getMinutes()).padStart(2, '0')}`;
+    XLSX.writeFile(libro, `Corte_ElKraken_${corteActual.fecha}_${marcaHora}.xlsx`);
+    Utils.notificar('Archivo Excel descargado', 'exito');
+  });
+
+  // Genera automáticamente el corte de hoy al cargar la página
+  pintarCorte(CorteData.obtenerPorFecha(Utils.fechaHoy()) || CorteData.generar(Utils.fechaHoy()));
+
+  function pintarUsoAlmacenamiento() {
+    const kbVentas = Storage.tamanoKB(Storage.CLAVES.VENTAS);
+    const kbCortes = Storage.tamanoKB(Storage.CLAVES.CORTES);
+    const total = kbVentas + kbCortes;
+    const el = document.getElementById('uso-almacenamiento');
+    if (el) {
+      el.textContent = `Uso aproximado de almacenamiento: ${total} KB (ventas: ${kbVentas} KB, cortes: ${kbCortes} KB). La mayoría de navegadores permiten varios MB; si ves errores de guardado, usa "Liberar espacio".`;
+    }
+  }
+  pintarUsoAlmacenamiento();
+
+  document.getElementById('btn-liberar-espacio').addEventListener('click', async () => {
+    const fechaCorte = document.getElementById('fecha-corte').value || Utils.fechaHoy();
+    const confirmado = await Utils.confirmar(
+      `Esto borrará las VENTAS y CORTES anteriores a ${fechaCorte} para liberar espacio. ` +
+      `Asegúrate de haber exportado a Excel los cortes que quieras conservar antes de continuar. ` +
+      `Esta acción no se puede deshacer. ¿Deseas continuar?`
+    );
+    if (!confirmado) return;
+
+    const ventasBorradas = VentasData.eliminarAnterioresA(fechaCorte);
+    const cortesBorrados = CorteData.eliminarAnterioresA(fechaCorte);
+
+    Utils.notificar(
+      `Se liberó espacio: ${ventasBorradas} venta(s) y ${cortesBorrados} corte(s) antiguos eliminados.`,
+      'exito'
+    );
+    pintarUsoAlmacenamiento();
+    pintarCorte(CorteData.obtenerPorFecha(fechaCorte) || CorteData.generar(fechaCorte));
+  });
+</script>
+
+</body>
+</html>

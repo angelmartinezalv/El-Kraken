@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cobro - El Kraken</title>
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/componentes.css">
+</head>
+<body>
+
+<div class="app">
+  <div id="nav-lateral" class="nav-lateral"></div>
+
+  <div class="contenido">
+    <div class="encabezado-pagina">
+      <h1 id="titulo-cobro">Cobro</h1>
+      <a href="pedidos.html"><button class="btn btn--secundario">← Volver a mesas</button></a>
+    </div>
+
+    <div class="layout-pedido">
+      <!-- Resumen de la cuenta -->
+      <div class="tarjeta">
+        <h2>Resumen de la cuenta</h2>
+        <div id="resumen-pedido"></div>
+        <div class="total-pedido">
+          <span>Total a pagar</span>
+          <span id="total-a-pagar">$0.00</span>
+        </div>
+      </div>
+
+      <!-- Panel de cobro -->
+      <div class="panel-pedido">
+        <div class="tarjeta">
+          <h2>Cobrar</h2>
+
+          <div class="campo">
+            <label for="metodo-pago">Método de pago</label>
+            <select id="metodo-pago">
+              <option value="Efectivo">Efectivo</option>
+              <option value="Tarjeta">Tarjeta</option>
+              <option value="Transferencia">Transferencia</option>
+            </select>
+          </div>
+
+          <div class="campo" id="campo-recibido">
+            <label for="monto-recibido">Monto recibido</label>
+            <input type="number" id="monto-recibido" min="0" step="0.5" placeholder="0.00">
+          </div>
+
+          <div class="tarjeta-resumen" style="border-left-color: var(--color-exito); margin-top: 10px;">
+            <div class="tarjeta-resumen__etiqueta">Cambio a entregar</div>
+            <div class="tarjeta-resumen__valor" id="cambio-mostrado">$0.00</div>
+          </div>
+
+          <button class="btn btn--exito btn--grande" id="btn-confirmar-cobro" style="margin-top:16px;">
+            ✅ Confirmar cobro e imprimir ticket
+          </button>
+          <button class="btn btn--secundario btn--grande" id="btn-imprimir-sin-cobro" style="margin-top:10px;">
+            🖨️ Imprimir ticket sin cobrar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Ticket oculto en pantalla, visible solo al imprimir -->
+<div id="ticket-imprimible" style="display:none;"></div>
+
+<script src="js/utils/utils.js"></script>
+<script src="js/data/storage.js"></script>
+<script src="js/data/productos.js"></script>
+<script src="js/data/cuentas.js"></script>
+<script src="js/data/ventas.js"></script>
+<script src="js/data/corte.js"></script>
+<script src="js/ui/navegacion.js"></script>
+<script>
+  renderizarNavegacion('pedidos');
+
+  const parametros = new URLSearchParams(window.location.search);
+  const cuentaId = parametros.get('cuenta');
+  const cuenta = cuentaId ? CuentasData.obtenerPorId(cuentaId) : null;
+
+  if (!cuenta || cuenta.items.length === 0) {
+    Utils.notificar('No se encontró esa mesa/pedido o ya fue cobrada', 'error');
+    setTimeout(() => (window.location.href = 'pedidos.html'), 1400);
+  } else {
+    document.getElementById('titulo-cobro').textContent = `Cobro — ${cuenta.nombre}`;
+  }
+
+  function pintarResumen() {
+    if (!cuenta) return;
+    document.getElementById('resumen-pedido').innerHTML = cuenta.items
+      .map(
+        (item) => `
+        <div class="linea-pedido">
+          <div class="linea-pedido__nombre">${item.cantidad} × ${item.nombre}</div>
+          <div class="linea-pedido__subtotal">${Utils.formatoMoneda(item.precio * item.cantidad)}</div>
+        </div>
+      `
+      )
+      .join('');
+
+    if (cuenta.notas) {
+      document.getElementById('resumen-pedido').innerHTML += `<p class="texto-suave" style="margin-top:10px;">📝 ${cuenta.notas}</p>`;
+    }
+
+    const total = CuentasData.calcularTotal(cuenta);
+    document.getElementById('total-a-pagar').textContent = Utils.formatoMoneda(total);
+  }
+
+  function calcularCambio() {
+    const total = CuentasData.calcularTotal(cuenta);
+    const recibido = parseFloat(document.getElementById('monto-recibido').value) || 0;
+    const cambio = Utils.redondear(recibido - total);
+    document.getElementById('cambio-mostrado').textContent = Utils.formatoMoneda(cambio > 0 ? cambio : 0);
+    return { total, recibido, cambio };
+  }
+
+  document.getElementById('monto-recibido').addEventListener('input', calcularCambio);
+
+  document.getElementById('metodo-pago').addEventListener('change', (e) => {
+    const esEfectivo = e.target.value === 'Efectivo';
+    document.getElementById('campo-recibido').style.display = esEfectivo ? 'block' : 'none';
+    if (!esEfectivo) {
+      const total = CuentasData.calcularTotal(cuenta);
+      document.getElementById('monto-recibido').value = total;
+      calcularCambio();
+    }
+  });
+
+  function generarTicketHTML(venta) {
+    return `
+      <div class="ticket">
+        <img src="assets/logo.jpg" alt="El Kraken" class="ticket-logo" />
+        <h2>El Kraken</h2>
+        <p class="texto-centro">Servando Canales #227, entre Morelos y Zaragoza</p>
+        <p class="texto-centro">Tel/WhatsApp: 831-898-4956</p>
+        <div class="linea-separadora"></div>
+        <p class="texto-centro">${venta.tipo || 'Ticket'} #${venta.folio}</p>
+        <p class="texto-centro">${venta.mesa ? venta.mesa + ' — ' : ''}${Utils.fechaHoraLegible(venta.fecha)}</p>
+        <div class="linea-separadora"></div>
+        <table>
+          <thead>
+            <tr><th>Cant</th><th>Producto</th><th class="texto-derecha">Subt.</th></tr>
+          </thead>
+          <tbody>
+            ${venta.items
+              .map(
+                (i) => `
+              <tr>
+                <td>${i.cantidad}</td>
+                <td>${i.nombre}</td>
+                <td class="texto-derecha">${Utils.formatoMoneda(i.precio * i.cantidad)}</td>
+              </tr>
+            `
+              )
+              .join('')}
+          </tbody>
+        </table>
+        <div class="linea-separadora"></div>
+        <table>
+          <tr><td>Total</td><td class="texto-derecha"><strong>${Utils.formatoMoneda(venta.total)}</strong></td></tr>
+          ${venta.recibido != null ? `
+            <tr><td>Pago (${venta.metodoPago})</td><td class="texto-derecha">${Utils.formatoMoneda(venta.recibido)}</td></tr>
+            <tr><td>Cambio</td><td class="texto-derecha">${Utils.formatoMoneda(venta.cambio)}</td></tr>
+          ` : `
+            <tr><td>Forma</td><td class="texto-derecha">${venta.metodoPago}</td></tr>
+          `}
+        </table>
+        ${venta.notas ? `<div class="linea-separadora"></div><p>Notas: ${venta.notas}</p>` : ''}
+        <div class="linea-separadora"></div>
+        <p class="texto-centro">¡Gracias por su preferencia!</p>
+      </div>
+    `;
+  }
+
+  let imprimiendo = false;
+
+  function imprimirTicket(venta, alTerminar) {
+    const ticketHTML = generarTicketHTML(venta);
+    const ticketElemento = document.getElementById('ticket-imprimible');
+    ticketElemento.innerHTML = ticketHTML;
+    ticketElemento.style.display = 'block';
+
+    let yaEjecutado = false;
+    const finalizar = () => {
+      if (yaEjecutado) return;
+      yaEjecutado = true;
+      window.removeEventListener('afterprint', finalizar);
+      ticketElemento.style.display = 'none';
+      imprimiendo = false;
+      document.getElementById('btn-confirmar-cobro').disabled = false;
+      document.getElementById('btn-imprimir-sin-cobro').disabled = false;
+      if (typeof alTerminar === 'function') alTerminar();
+    };
+
+    // "afterprint" es más confiable que un tiempo fijo: se dispara justo
+    // cuando el usuario cierra el diálogo de impresión (acepte o cancele).
+    window.addEventListener('afterprint', finalizar);
+
+    // Pequeña espera para que el navegador termine de renderizar el ticket
+    // (incluyendo el logo) antes de abrir el diálogo de impresión.
+    setTimeout(() => {
+      window.print();
+      // Respaldo por si el navegador no dispara "afterprint" (ocurre en
+      // algunos casos con impresoras térmicas conectadas por USB/red).
+      setTimeout(finalizar, 1500);
+    }, 250);
+  }
+
+  document.getElementById('btn-confirmar-cobro').addEventListener('click', () => {
+    if (!cuenta || imprimiendo) return;
+    const metodoPago = document.getElementById('metodo-pago').value;
+    const { total, recibido, cambio } = calcularCambio();
+
+    if (metodoPago === 'Efectivo' && recibido < total) {
+      Utils.notificar('El monto recibido es menor al total', 'error');
+      return;
+    }
+
+    imprimiendo = true;
+    document.getElementById('btn-confirmar-cobro').disabled = true;
+    document.getElementById('btn-imprimir-sin-cobro').disabled = true;
+
+    const venta = VentasData.registrar({
+      items: cuenta.items,
+      notas: cuenta.notas,
+      total,
+      recibido,
+      cambio: metodoPago === 'Efectivo' ? cambio : 0,
+      metodoPago,
+      mesa: cuenta.nombre,
+      tipo: 'Venta',
+    });
+
+    CuentasData.cerrar(cuenta.id);
+
+    Utils.notificar('Venta registrada correctamente', 'exito');
+
+    imprimirTicket(venta, () => {
+      window.location.href = 'pedidos.html';
+    });
+  });
+
+  document.getElementById('btn-imprimir-sin-cobro').addEventListener('click', () => {
+    if (!cuenta || imprimiendo) return;
+    imprimiendo = true;
+    document.getElementById('btn-confirmar-cobro').disabled = true;
+    document.getElementById('btn-imprimir-sin-cobro').disabled = true;
+
+    const total = CuentasData.calcularTotal(cuenta);
+    const ventaDeCortesia = {
+      folio: 'CORTESÍA',
+      fecha: new Date().toISOString(),
+      items: cuenta.items,
+      notas: cuenta.notas,
+      total,
+      recibido: null,
+      cambio: 0,
+      metodoPago: 'Impresión sin cobro',
+      mesa: cuenta.nombre,
+      tipo: 'Cortesía',
+    };
+
+    imprimirTicket(ventaDeCortesia, () => {
+      Utils.notificar('Ticket impreso sin cobrar. La cuenta sigue abierta.', 'exito');
+    });
+  });
+
+  pintarResumen();
+</script>
+
+</body>
+</html>

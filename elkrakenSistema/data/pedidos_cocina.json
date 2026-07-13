@@ -1,0 +1,48 @@
+[
+  {
+    "id": "cuenta_1783964019898_54059",
+    "nombre": "3",
+    "items": [
+      {
+        "productoId": "prod_1783813421996_94570",
+        "nombre": "Chorizo Argentino o Chistorra Gratinada",
+        "precio": 100,
+        "cantidad": 1
+      },
+      {
+        "productoId": "prod_1783813421996_7559",
+        "nombre": "Extra de Queso",
+        "precio": 10,
+        "cantidad": 1
+      },
+      {
+        "productoId": "prod_1783813421996_60436",
+        "nombre": "Extra de Aguacate",
+        "precio": 10,
+        "cantidad": 1
+      }
+    ],
+    "notas": "",
+    "creada": "2026-07-13T17:33:39.898Z"
+  },
+  {
+    "id": "cuenta_1783964047644_25635",
+    "nombre": "5",
+    "items": [
+      {
+        "productoId": "prod_1783813421996_41382",
+        "nombre": "Papas Gajo",
+        "precio": 65,
+        "cantidad": 1
+      },
+      {
+        "productoId": "prod_1783813421996_90501",
+        "nombre": "Dedos de Queso",
+        "precio": 85,
+        "cantidad": 1
+      }
+    ],
+    "notas": "",
+    "creada": "2026-07-13T17:34:07.644Z"
+  }
+]
